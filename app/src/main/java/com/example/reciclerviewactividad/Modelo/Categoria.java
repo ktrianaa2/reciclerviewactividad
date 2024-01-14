@@ -1,15 +1,15 @@
 package com.example.reciclerviewactividad.Modelo;
 
 public class Categoria {
-    private String id;
+    private int id;
     private String descripcion;
 
-    public Categoria(String id, String descripcion) {
+    public Categoria(int id, String descripcion) {
         this.id = id;
         this.descripcion = descripcion;
     }
 
-    public String getId() {
+    public int getId() {
         return id;
     }
 

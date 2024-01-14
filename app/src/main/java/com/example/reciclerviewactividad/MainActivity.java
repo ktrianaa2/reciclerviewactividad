@@ -1,14 +1,19 @@
 package com.example.reciclerviewactividad;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 
+import com.example.reciclerviewactividad.Adaptador.AdaptadorLugar;
+import com.example.reciclerviewactividad.Listener.spListener;
 import com.example.reciclerviewactividad.Modelo.Categoria;
+import com.example.reciclerviewactividad.Modelo.Lugar;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -22,11 +27,17 @@ import java.util.Map;
 import WebServices.Asynchtask;
 import WebServices.WebService;
 
-public class MainActivity extends AppCompatActivity implements Asynchtask {
+
+
+public class MainActivity extends AppCompatActivity implements Asynchtask, AdapterView.OnItemSelectedListener  {
 
     private Spinner spCategoria;
     private Spinner spSubCategoria;
     private List<Categoria> categorias;
+
+    Map<String, String> datosWS = new HashMap<String, String>();
+
+    RecyclerView rvListaLugares;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,84 +46,70 @@ public class MainActivity extends AppCompatActivity implements Asynchtask {
 
         spCategoria = findViewById(R.id.spCategoria);
         spSubCategoria = findViewById(R.id.spSubCategoria);
+        rvListaLugares = findViewById(R.id.gridlugares);
+        spCategoria.setOnItemSelectedListener(this);
+        spSubCategoria.setOnItemSelectedListener(this);
 
-        Map<String, String> datos = new HashMap<>();
-        WebService ws = new WebService("https://uealecpeterson.net/turismo/categoria/getlistadoCB",
-                datos, MainActivity.this, MainActivity.this);
+
+        WebService ws= new WebService(
+                "https://uealecpeterson.net/turismo/categoria/getlistadoCB",
+                datosWS, MainActivity.this,
+                new spListener(spCategoria, "id", "descripcion", true) );
         ws.execute("GET");
+
+        rvListaLugares.setHasFixedSize(true);
+        rvListaLugares.setLayoutManager(new LinearLayoutManager(this));
     }
 
     @Override
     public void processFinish(String result) throws JSONException {
-        categorias = new ArrayList<>();
-        List<String> subCategorias = new ArrayList<>();
+        ArrayList<Lugar> lstLugares;
 
-        JSONArray jsonArray = new JSONArray(result);
-        for (int i = 0; i < jsonArray.length(); i++) {
-            JSONObject jsonObject = jsonArray.getJSONObject(i);
-            String id = jsonObject.getString("id");
-            String descripcion = jsonObject.getString("descripcion");
-            categorias.add(new Categoria(id, descripcion));
-        }
+        JSONObject JSONlista = new JSONObject(result);
+        JSONArray JSONlistaLugares = JSONlista.getJSONArray("data");
+        lstLugares = Lugar.JsonObjectsBuild(JSONlistaLugares);
 
-        ArrayAdapter<String> categoriaAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, obtenerNombresCategorias());
-        categoriaAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spCategoria.setAdapter(categoriaAdapter);
+        int numberOfColumns = 2;
+        rvListaLugares.setLayoutManager(new GridLayoutManager(this, numberOfColumns));
 
-        ArrayAdapter<String> subCategoriaAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, subCategorias);
-        subCategoriaAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spSubCategoria.setAdapter(subCategoriaAdapter);
+        rvListaLugares.setHasFixedSize(true);
 
-        spCategoria.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parentView, View selectedItemView, int position, long id) {
-                String categoriaSeleccionada = spCategoria.getSelectedItem().toString();
-
-                obtenerSubCategorias(categoriaSeleccionada);
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parentView) {
-            }
-        });
+        AdaptadorLugar adaptadorLugaresT = new AdaptadorLugar(this, lstLugares);
+        rvListaLugares.setAdapter(adaptadorLugaresT);
     }
 
-    private void obtenerSubCategorias(String categoria) {
-        String url = "https://uealecpeterson.net/turismo/subcategoria/getlistadoCB/" + obtenerIdCategoria(categoria);
-        Map<String, String> datos = new HashMap<>();
-        WebService ws = new WebService(url, datos, MainActivity.this, new Asynchtask() {
-            @Override
-            public void processFinish(String result) throws JSONException {
-                List<String> subCategorias = new ArrayList<>();
 
-                JSONArray jsonArray = new JSONArray(result);
-                for (int i = 0; i < jsonArray.length(); i++) {
-                    JSONObject jsonObject = jsonArray.getJSONObject(i);
-                    String descripcion = jsonObject.getString("descripcion");
-                    subCategorias.add(descripcion);
-                }
-                ArrayAdapter<String> subCategoriaAdapter = new ArrayAdapter<>(MainActivity.this, android.R.layout.simple_spinner_item, subCategorias);
-                subCategoriaAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                spSubCategoria.setAdapter(subCategoriaAdapter);
+    @Override
+    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+
+        int IDCat=0, IDSubCat=0;
+        int IDItemSeleccionado = ((Categoria)parent.getItemAtPosition(position)).getId();
+        if(parent == spCategoria) {
+            if (IDItemSeleccionado>0){
+                IDCat = IDItemSeleccionado;
+                WebService ws2= new WebService(
+                        "https://uealecpeterson.net/turismo/subcategoria/getlistadoCB/" + IDCat,
+                        datosWS, MainActivity.this,
+                        new spListener(spSubCategoria, "id", "descripcion", true) );
+                ws2.execute("GET");
             }
-        });
-        ws.execute("GET");
-    }
 
-    private List<String> obtenerNombresCategorias() {
-        List<String> nombresCategorias = new ArrayList<>();
-        for (Categoria Categoria : categorias) {
-            nombresCategorias.add(Categoria.getDescripcion());
-        }
-        return nombresCategorias;
-    }
-
-    private String obtenerIdCategoria(String categoria) {
-        for (Categoria Categoria : categorias) {
-            if (Categoria.getDescripcion().equals(categoria)) {
-                return Categoria.getId();
+        }else if (parent == spSubCategoria){
+            if (spCategoria.getSelectedItemPosition()!=AdapterView.INVALID_POSITION){
+                IDCat = ((Categoria)spCategoria.getSelectedItem()).getId();
+                IDSubCat = IDItemSeleccionado;
             }
         }
-        return "";
+
+        WebService ws3 = new WebService(
+                "https://uealecpeterson.net/turismo/lugar_turistico/json_getlistadoGridLT/" +
+                        IDCat + "/" + IDSubCat,
+                datosWS, MainActivity.this, MainActivity.this);
+        ws3.execute("GET");
+    }
+
+    @Override
+    public void onNothingSelected(AdapterView<?> parent) {
+
     }
 }
